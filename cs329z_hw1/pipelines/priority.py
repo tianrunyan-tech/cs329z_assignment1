@@ -15,6 +15,7 @@ LABEL: <urgent|normal|ignore>
 REASON: <one sentence>"""
 
 
+# Convert the email dictionary into labeled text because lm requires string content in each message.
 def format_email(email):
     return (
         f"From: {email['from']}\n"
@@ -25,6 +26,7 @@ def format_email(email):
     )
 
 
+# Extract the label from the model's text reply so the program can use it; return unknown if the expected format is missing.
 def parse_label(reply):
     match = re.search(r"label:\s*(urgent|normal|ignore)", reply.lower())
     if match:
@@ -32,6 +34,7 @@ def parse_label(reply):
     return "unknown"
 
 
+# Send the rubric and email to the model, then organize its text reply into a dictionary for tests and downstream code.
 def classify(email, lm):
     reply = lm([
         {"role": "system", "content": SYSTEM_PROMPT},

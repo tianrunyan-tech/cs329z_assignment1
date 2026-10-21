@@ -45,6 +45,7 @@ from cs329z_hw1.types import (
 # ======================================================================
 
 
+# 问题 1 (priority)：用一次 LLM 调用把一封邮件分成 urgent / normal / ignore，返回分类和理由
 def run_priority(email: Email, lm: LMCallable) -> dict:
     """Problem (priority).
 
@@ -61,9 +62,11 @@ def run_priority(email: Email, lm: LMCallable) -> dict:
     * The function does not raise and does not modify ``email``.
     * Live: at least 85% agreement with tests/fixtures/priority_gold.json.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.priority import classify
+    return classify(email, lm)
 
 
+# 问题 2 (daily_digest)：对一天的邮件逐封分类，去掉 ignore，再用 LLM 写一份不超过 300 词的晨报
 def run_daily_digest(emails: list[Email], lm: LMCallable) -> str:
     """Problem (daily_digest).
 
@@ -82,6 +85,7 @@ def run_daily_digest(emails: list[Email], lm: LMCallable) -> str:
     raise NotImplementedError
 
 
+# 问题 3 (bm25)：对所有文档建立 BM25 倒排索引（不用 LLM）
 def run_bm25_build(docs: list[str]) -> Any:
     """Problem (bm25).
 
@@ -95,6 +99,7 @@ def run_bm25_build(docs: list[str]) -> Any:
     raise NotImplementedError
 
 
+# 问题 3 (bm25)：用索引搜索查询，返回得分最高的 k 个 (文档编号, 分数)
 def run_bm25_search(index: Any, query: str, k: int) -> list[tuple[int, float]]:
     """Problem (bm25).
 
@@ -116,6 +121,7 @@ def run_bm25_search(index: Any, query: str, k: int) -> list[tuple[int, float]]:
     raise NotImplementedError
 
 
+# 问题 4 (email_qa)：搜索邮件 + LLM 回答问题（最多搜 3 次），返回答案和依据的邮件 id
 def run_email_qa(
     question: str,
     search: Callable[[str, int], list[Email]],
@@ -147,6 +153,7 @@ def run_email_qa(
 # ======================================================================
 
 
+# 问题 5 (tool_registry)：工具注册表，能列出工具、检查参数、安全地执行工具
 def run_tool_registry(tools: list[ToolSpec]) -> Any:
     """Problem (tool_registry).
 
@@ -174,6 +181,7 @@ def run_tool_registry(tools: list[ToolSpec]) -> Any:
     raise NotImplementedError
 
 
+# 问题 6 (tool_protocol)：生成放进 system prompt 的工具说明，告诉模型有哪些工具、怎么调用
 def run_render_tools(schemas: list[dict]) -> str:
     """Problem (tool_protocol).
 
@@ -186,6 +194,7 @@ def run_render_tools(schemas: list[dict]) -> str:
     raise NotImplementedError
 
 
+# 问题 6 (tool_protocol)：从模型回复里解析出工具调用（没有调用、多个调用、被截断都要处理）
 def run_parse_response(text: str) -> ParsedResponse:
     """Problem (tool_protocol).
 
@@ -206,6 +215,7 @@ def run_parse_response(text: str) -> ParsedResponse:
     raise NotImplementedError
 
 
+# 问题 6 (tool_protocol)：按我们的格式把一个工具调用写成文字（测试用的假模型会用到）
 def run_format_tool_call(text: str, call: ToolCall) -> str:
     """Problem (tool_protocol), test adapter.
 
@@ -225,6 +235,7 @@ def run_format_tool_call(text: str, call: ToolCall) -> str:
     raise NotImplementedError
 
 
+# 问题 7、10–15：创建一个 agent 会话（工具调用循环、终端、压缩、记忆、交互、防护都在这里）
 def run_agent_session(
     lm: LMCallable,
     tools: Optional[list[ToolSpec]],
@@ -341,6 +352,7 @@ def run_agent_session(
     raise NotImplementedError
 
 
+# 问题 9 (search_docs)：对 Cardinal 公司的文档建立搜索索引
 def run_build_doc_index(docs: list[dict]) -> Any:
     """Problem (search_docs). Index the company documents.
 
@@ -354,6 +366,7 @@ def run_build_doc_index(docs: list[dict]) -> Any:
     raise NotImplementedError
 
 
+# 问题 9 (search_docs)：搜索公司文档，返回最多 k 个结果（doc_id、标题、简短片段）
 def run_search_docs(index: Any, query: str, k: int = 5) -> list[SearchResult]:
     """Problem (search_docs). Search the documents in ``index``.
 
@@ -371,6 +384,7 @@ def run_search_docs(index: Any, query: str, k: int = 5) -> list[SearchResult]:
     raise NotImplementedError
 
 
+# 问题 9 (search_docs)：从某一行开始读取文档的一段（最多 1500 tokens）
 def run_read_doc(index: Any, doc_id: str, start_line: int = 1) -> DocWindow:
     """Problem (search_docs). Read a bounded window of one document in ``index``.
 

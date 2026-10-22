@@ -97,7 +97,8 @@ def run_bm25_build(docs: list[str]) -> Any:
     back to ``run_bm25_search``. The index over the archive must build in
     under 15 seconds.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.bm25 import build_index
+    return build_index(docs)
 
 
 # 问题 3 (bm25)：用索引搜索查询，返回得分最高的 k 个 (文档编号, 分数)
@@ -119,7 +120,8 @@ def run_bm25_search(index: Any, query: str, k: int) -> list[tuple[int, float]]:
       query on average over the archive, and 2 ms for a term that occurs in
       3 of 200,000 documents.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.bm25 import search
+    return search(index, query, k)
 
 
 # 问题 4 (email_qa)：搜索邮件 + LLM 回答问题（最多搜 3 次），返回答案和依据的邮件 id

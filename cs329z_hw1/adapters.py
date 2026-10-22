@@ -82,7 +82,8 @@ def run_daily_digest(emails: list[Email], lm: LMCallable) -> str:
       site that email is about; it contains no term listed for the gold
       ignore emails.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.digest import daily_digest
+    return daily_digest(emails, lm)
 
 
 # 问题 3 (bm25)：对所有文档建立 BM25 倒排索引（不用 LLM）

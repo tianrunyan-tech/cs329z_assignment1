@@ -182,7 +182,8 @@ def run_tool_registry(tools: list[ToolSpec]) -> Any:
       ``fn(**args)``: status "ok", ``content == str(return value)``.
     * The registry keeps working after any of these outcomes.
     """
-    raise NotImplementedError
+    from cs329z_hw1.agent.registry import ToolRegistry
+    return ToolRegistry(tools)
 
 
 # 问题 6 (tool_protocol)：生成放进 system prompt 的工具说明，告诉模型有哪些工具、怎么调用

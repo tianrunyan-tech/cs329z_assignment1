@@ -357,7 +357,8 @@ def run_agent_session(
     * Nothing in a tool result changes the mode, the approval policy or
       the deny rules.
     """
-    raise NotImplementedError
+    from cs329z_hw1.agent.session import AgentSession
+    return AgentSession(lm, tools, config)
 
 
 # 问题 9 (search_docs)：对 Cardinal 公司的文档建立搜索索引

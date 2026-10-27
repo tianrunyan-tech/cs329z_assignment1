@@ -196,7 +196,8 @@ def run_render_tools(schemas: list[dict]) -> str:
     this text, the model must write a correct call for at least 18 of the 20
     requests in tests/fixtures/agent_protocol_requests.json.
     """
-    raise NotImplementedError
+    from cs329z_hw1.agent.protocol import render_tools
+    return render_tools(schemas)
 
 
 # 问题 6 (tool_protocol)：从模型回复里解析出工具调用（没有调用、多个调用、被截断都要处理）
@@ -217,7 +218,8 @@ def run_parse_response(text: str) -> ParsedResponse:
       is exactly the original call, never a different one. If the cut is
       inside the arguments, ``tool_call`` is None and ``error`` is set.
     """
-    raise NotImplementedError
+    from cs329z_hw1.agent.protocol import parse_response
+    return parse_response(text)
 
 
 # 问题 6 (tool_protocol)：按我们的格式把一个工具调用写成文字（测试用的假模型会用到）
@@ -237,7 +239,8 @@ def run_format_tool_call(text: str, call: ToolCall) -> str:
       complete call in your own format.
     * ``call`` is not modified.
     """
-    raise NotImplementedError
+    from cs329z_hw1.agent.protocol import format_tool_call
+    return format_tool_call(text, call)
 
 
 # 问题 7、10–15：创建一个 agent 会话（工具调用循环、终端、压缩、记忆、交互、防护都在这里）

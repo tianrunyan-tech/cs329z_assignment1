@@ -38,17 +38,6 @@ def render_tools(schemas):
     return "\n".join(lines)
 
 
-# Write a reply that contains the text and one call in our format.
-def format_tool_call(text, call):
-    payload = json.dumps({"name": call.name, "args": call.args}, ensure_ascii=False)
-    block = f"{START}\n{payload}\n{END}"
-
-    text = text.strip()
-    if text:
-        return f"{text}\n{block}"
-    return block
-
-
 # Find at most one call in a reply; never raise.
 def parse_response(reply):
     start = reply.find(START)
@@ -92,3 +81,14 @@ def parse_response(reply):
     text_after = rest.strip()
     text = "\n".join(part for part in (text_before, text_after) if part)
     return ParsedResponse(text=text, tool_call=ToolCall(name=payload["name"], args=args))
+
+
+# Write a reply that contains the text and one call in our format.
+def format_tool_call(text, call):
+    payload = json.dumps({"name": call.name, "args": call.args}, ensure_ascii=False)
+    block = f"{START}\n{payload}\n{END}"
+
+    text = text.strip()
+    if text:
+        return f"{text}\n{block}"
+    return block

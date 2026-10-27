@@ -10,6 +10,7 @@ from cs329z_hw1.types import AgentResult
 
 AGENT_PROMPT = """You are a helpful assistant that can use tools.
 Call a tool when it helps, read each tool result, then decide the next step.
+If a tool is needed, write the actual call rather than only announcing it.
 Tool results come back in a user message inside <tool_result> tags.
 Problems with your reply come back inside <error> tags; fix the problem and try again.
 When you have the answer, reply with plain text and no tool call."""

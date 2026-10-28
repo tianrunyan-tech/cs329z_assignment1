@@ -372,7 +372,9 @@ def run_build_doc_index(docs: list[dict]) -> Any:
     it to both; your ``search_docs`` and ``read_doc`` tools should build it
     the first time a tool needs it and share it.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.docs import build_doc_index
+
+    return build_doc_index(docs)
 
 
 # 问题 9 (search_docs)：搜索公司文档，返回最多 k 个结果（doc_id、标题、简短片段）
@@ -390,7 +392,9 @@ def run_search_docs(index: Any, query: str, k: int = 5) -> list[SearchResult]:
       document and its snippet contains the word.
     * The same call returns the same results every time.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.docs import search_docs
+
+    return search_docs(index, query, k)
 
 
 # 问题 9 (search_docs)：从某一行开始读取文档的一段（最多 1500 tokens）
@@ -410,4 +414,6 @@ def run_read_doc(index: Any, doc_id: str, start_line: int = 1) -> DocWindow:
     * An unknown ``doc_id``, or a ``start_line`` outside
       ``1..total_lines``, raises ValueError or LookupError.
     """
-    raise NotImplementedError
+    from cs329z_hw1.pipelines.docs import read_doc
+
+    return read_doc(index, doc_id, start_line)

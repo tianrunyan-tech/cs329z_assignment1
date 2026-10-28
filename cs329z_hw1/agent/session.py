@@ -2,6 +2,7 @@
 
 import copy
 
+from cs329z_hw1.agent.cardinal_tools import choose_tools
 from cs329z_hw1.agent.protocol import parse_response, render_tools
 from cs329z_hw1.agent.registry import ToolRegistry
 from cs329z_hw1.llm import OutputTruncated
@@ -25,7 +26,10 @@ class AgentSession:
         self.lm = lm
         self.config = config
         self.mode = config.mode
-        self.registry = ToolRegistry(tools)
+
+        # Tools that call a model use aux_lm, so they never use up the agent's own turns.
+        aux_lm = config.aux_lm if config.aux_lm is not None else lm
+        self.registry = ToolRegistry(choose_tools(tools, config, aux_lm))
 
         # messages: what the model sees. transcript: every event, never changed.
         system_prompt = AGENT_PROMPT + "\n\n" + render_tools(self.registry.schemas())

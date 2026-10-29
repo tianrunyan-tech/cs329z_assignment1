@@ -13,20 +13,28 @@ AGENT_PROMPT = """You are a helpful assistant that can use tools.
 You have no built-in function calling. The only way to use a tool is to write a
 <tool_call> block as plain text in your reply, as shown below. A tool runs only
 when your reply contains that block.
+The tools listed below are available in this conversation. Never tell the user that you cannot access them.
 Call a tool when it helps, read each tool result, then decide the next step.
 If a tool is needed, write the actual call rather than only announcing it.
 Tool results come back in a user message inside <tool_result> tags.
 Problems with your reply come back inside <error> tags; fix the problem and try again.
+Before you say you cannot find something, use the tools to look further, for example by reading the full document or email.
 When you have the answer, reply with plain text and no tool call."""
 
 # Statuses that mean the model wrote a bad call, so it should correct itself.
 MALFORMED_STATUSES = ("unknown_tool", "invalid_args")
 
-# Sent once per send when a reply has no tool call but only announces one (or is empty).
-REMINDER = (
-    "You did not write a <tool_call> block, so no tool ran. To use a tool, write the "
-    "<tool_call> block now. If you already have the answer, give it in plain text."
-)
+# Sent (at most twice per send) when a reply has no tool call but only announces one or is empty.
+# The example uses a tool this session really has, so the model can copy it.
+def reminder(example_tool):
+    return (
+        "No tool ran: a tool call made any other way than text is lost.\n"
+        "Write the call as plain text in your reply, starting with <tool_call>, for example:\n"
+        "<tool_call>\n"
+        f'{{"name": "{example_tool}", "args": {{"query": "your search words"}}}}\n'
+        "</tool_call>\n"
+        "If you already have the answer, give it in plain text instead."
+    )
 
 
 # True for an empty reply, or a short reply that only announces an action
@@ -51,6 +59,10 @@ class AgentSession:
         aux_lm = config.aux_lm if config.aux_lm is not None else lm
         self.registry = ToolRegistry(choose_tools(tools, config, aux_lm))
 
+        # The first tool's name is used in the reminder's example call.
+        schemas = self.registry.schemas()
+        self.example_tool = schemas[0]["name"] if schemas else "tool_name"
+
         # messages: what the model sees. transcript: every event, never changed.
         system_prompt = AGENT_PROMPT + "\n\n" + render_tools(self.registry.schemas())
         self.messages = [{"role": "system", "content": system_prompt}]
@@ -69,7 +81,7 @@ class AgentSession:
         turns = 0
         tokens_used = 0
         malformed_in_a_row = 0
-        reminded = False
+        reminders = 0
 
         while True:
             # 1. Check both budgets before every model call.
@@ -110,11 +122,12 @@ class AgentSession:
 
                 # End the send when a well-formed reply contains no tool call.
                 elif parsed.tool_call is None:
-                    # An empty or announcing reply gets one reminder per send.
-                    if not reminded and looks_like_announcement(parsed.text):
-                        reminded = True
-                        self.transcript.append({"type": "reminder", "content": REMINDER})
-                        self.messages.append({"role": "user", "content": f"<error>\n{REMINDER}\n</error>"})
+                    # An empty or announcing reply gets a reminder, at most twice per send.
+                    if reminders < 2 and looks_like_announcement(parsed.text):
+                        reminders += 1
+                        text = reminder(self.example_tool)
+                        self.transcript.append({"type": "reminder", "content": text})
+                        self.messages.append({"role": "user", "content": f"<error>\n{text}\n</error>"})
                     else:
                         text = parsed.text or "(The model returned an empty answer.)"
                         return self.finish("done", text)

@@ -10,6 +10,9 @@ from cs329z_hw1.tokens import count_message_tokens, count_tokens
 from cs329z_hw1.types import AgentResult
 
 AGENT_PROMPT = """You are a helpful assistant that can use tools.
+You have no built-in function calling. The only way to use a tool is to write a
+<tool_call> block as plain text in your reply, as shown below. A tool runs only
+when your reply contains that block.
 Call a tool when it helps, read each tool result, then decide the next step.
 If a tool is needed, write the actual call rather than only announcing it.
 Tool results come back in a user message inside <tool_result> tags.
@@ -18,6 +21,23 @@ When you have the answer, reply with plain text and no tool call."""
 
 # Statuses that mean the model wrote a bad call, so it should correct itself.
 MALFORMED_STATUSES = ("unknown_tool", "invalid_args")
+
+# Sent once per send when a reply has no tool call but only announces one (or is empty).
+REMINDER = (
+    "You did not write a <tool_call> block, so no tool ran. To use a tool, write the "
+    "<tool_call> block now. If you already have the answer, give it in plain text."
+)
+
+
+# True for an empty reply, or a short reply that only announces an action
+# ("I'll look that up."). Such a reply gets one reminder instead of ending the send.
+def looks_like_announcement(text):
+    if not text.strip():
+        return True
+
+    starts = ("I'll", "I’ll", "I will", "Let me", "We need")
+    short = len(text.split()) < 40
+    return text.strip().startswith(starts) and short
 
 
 class AgentSession:
@@ -49,6 +69,7 @@ class AgentSession:
         turns = 0
         tokens_used = 0
         malformed_in_a_row = 0
+        reminded = False
 
         while True:
             # 1. Check both budgets before every model call.
@@ -89,8 +110,14 @@ class AgentSession:
 
                 # End the send when a well-formed reply contains no tool call.
                 elif parsed.tool_call is None:
-                    text = parsed.text or "(The model returned an empty answer.)"
-                    return self.finish("done", text)
+                    # An empty or announcing reply gets one reminder per send.
+                    if not reminded and looks_like_announcement(parsed.text):
+                        reminded = True
+                        self.transcript.append({"type": "reminder", "content": REMINDER})
+                        self.messages.append({"role": "user", "content": f"<error>\n{REMINDER}\n</error>"})
+                    else:
+                        text = parsed.text or "(The model returned an empty answer.)"
+                        return self.finish("done", text)
 
                 else:
                     status = self.run_tool(parsed.tool_call)

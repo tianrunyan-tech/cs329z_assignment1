@@ -87,7 +87,8 @@ def make_terminal_tool(config):
         shown = captured
 
         if count_tokens(captured) > observation_budget:
-            relative_path = save_output(captured)
+            # Save only the raw stdout, so line N of the file is line N of the output.
+            relative_path = save_output(result.stdout)
 
             # Leave room for status information and the saved-file pointer.
             stream_chars = max(
@@ -99,8 +100,9 @@ def make_terminal_tool(config):
                 f"{header}\n\n"
                 f"STDOUT:\n{head_tail(result.stdout, stream_chars)}\n\n"
                 f"STDERR:\n{head_tail(result.stderr, stream_chars)}\n\n"
-                f"Output shortened. Captured output saved to: "
+                f"Output shortened. The full STDOUT is saved to: "
                 f"{relative_path}\n"
+                "(line N of that file is line N of the output)\n"
                 "Use grep, head, tail, or python3 to inspect that file."
             )
 

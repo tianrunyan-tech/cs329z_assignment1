@@ -3,6 +3,7 @@
 from threading import Lock
 
 from cs329z_hw1 import data
+from cs329z_hw1.agent.terminal import make_terminal_tool
 from cs329z_hw1.cardinal import CARDINAL_TOOLS, cardinal_spec
 from cs329z_hw1.pipelines import doc_search
 from cs329z_hw1.pipelines.bm25 import build_index, search
@@ -78,7 +79,7 @@ DOCS = DocLibrary()
 
 
 # Build the ten Cardinal tools. aux_lm is used for the LLM calls inside tools.
-def cardinal_toolset(aux_lm):
+def cardinal_toolset(aux_lm, config):
 
     def search_emails(query, k=5):
         found = ARCHIVE.search(query, k)
@@ -198,7 +199,20 @@ def cardinal_toolset(aux_lm):
             "start_line of the next part. Read only the parts you need.",
             read_document,
         ),
-        "run_terminal": cardinal_spec("run_terminal", "Not available yet.", not_built_yet),
+        "run_terminal": cardinal_spec(
+            "run_terminal",
+            "Run one shell command in a sandboxed workspace and return its exit code, "
+            "stdout and stderr. The workspace holds emails.jsonl (the email archive, one "
+            "JSON object per line with the keys id, thread_id, reply_to, from, to, date, "
+            "subject, body) and docs/ (the company documents as .md files). Allowed "
+            "programs: python3 and standard text tools such as grep, sed, awk, sort, uniq, "
+            "wc, head, tail, cut. Not allowed: here-documents (<<), $(...) and backticks, "
+            "and programs given by path. For a multi-line script, use python3 -c '...'. "
+            "Each command runs on its own, with a time limit. Long output is cut to its "
+            "start and end and saved in full to a file under terminal_outputs/; search that file "
+            "with grep or read parts of it with sed -n.",
+            make_terminal_tool(config),
+        ),
         "remember": cardinal_spec("remember", "Not available yet.", not_built_yet),
         "recall": cardinal_spec("recall", "Not available yet.", not_built_yet),
         "ask_user": cardinal_spec("ask_user", "Not available yet.", not_built_yet),
@@ -208,7 +222,7 @@ def cardinal_toolset(aux_lm):
 # Decide a session's tools: the full Cardinal toolset, or the given list plus
 # ask_user (when there is a user) and remember/recall (when there is a memory_dir).
 def choose_tools(tools, config, aux_lm):
-    cardinal = cardinal_toolset(aux_lm)
+    cardinal = cardinal_toolset(aux_lm, config)
 
     if tools is None:
         return [cardinal[name] for name in CARDINAL_TOOLS]

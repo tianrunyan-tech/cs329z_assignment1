@@ -24,7 +24,7 @@ When you have the answer, reply with plain text and no tool call."""
 # Statuses that mean the model wrote a bad call, so it should correct itself.
 MALFORMED_STATUSES = ("unknown_tool", "invalid_args")
 
-# Sent (at most twice per send) when a reply has no tool call but only announces one or is empty.
+# Sent (at most 3 times per send) when a reply has no tool call but only announces one or is empty.
 # The example uses a tool this session really has, so the model can copy it.
 def reminder(example_tool):
     return (
@@ -37,15 +37,13 @@ def reminder(example_tool):
     )
 
 
-# True for an empty reply, or a short reply that only announces an action
-# ("I'll look that up."). Such a reply gets one reminder instead of ending the send.
-def looks_like_announcement(text):
-    if not text.strip():
-        return True
-
-    starts = ("I'll", "I’ll", "I will", "Let me", "We need")
-    short = len(text.split()) < 40
-    return text.strip().startswith(starts) and short
+# The aux_lm reads a reply that has no tool call and decides whether it really answers.
+JUDGE_PROMPT = """You check one reply from an assistant that can use tools.
+Decide whether the reply gives the user an answer, or only says what the assistant
+will do next (for example "I'll look that up") without doing it.
+A reply that uses a placeholder such as [name] or [date] instead of a real value
+has not answered either.
+Reply with exactly one word: ANSWER or ANNOUNCE."""
 
 
 class AgentSession:
@@ -56,8 +54,8 @@ class AgentSession:
         self.mode = config.mode
 
         # Tools that call a model use aux_lm, so they never use up the agent's own turns.
-        aux_lm = config.aux_lm if config.aux_lm is not None else lm
-        self.registry = ToolRegistry(choose_tools(tools, config, aux_lm))
+        self.aux_lm = config.aux_lm if config.aux_lm is not None else lm
+        self.registry = ToolRegistry(choose_tools(tools, config, self.aux_lm))
 
         # The first tool's name is used in the reminder's example call.
         schemas = self.registry.schemas()
@@ -122,8 +120,12 @@ class AgentSession:
 
                 # End the send when a well-formed reply contains no tool call.
                 elif parsed.tool_call is None:
-                    # An empty or announcing reply gets a reminder, at most twice per send.
-                    if reminders < 2 and looks_like_announcement(parsed.text):
+                    # An empty reply, or one the aux_lm judges as only announcing an action,
+                    # gets a reminder instead of ending the send (at most 3 times per send).
+                    if reminders < 3 and (
+                        not parsed.text.strip()
+                        or self.only_announces(user_message, parsed.text)
+                    ):
                         reminders += 1
                         text = reminder(self.example_tool)
                         self.transcript.append({"type": "reminder", "content": text})
@@ -148,6 +150,19 @@ class AgentSession:
                     "malformed",
                     "I stopped because my last three replies could not be used.",
                 )
+
+    # Ask the aux_lm whether a reply only announces an action.
+    # Anything unclear (an odd verdict, or an error) counts as a real answer.
+    def only_announces(self, user_message, reply):
+        try:
+            verdict = self.aux_lm([
+                {"role": "system", "content": JUDGE_PROMPT},
+                {"role": "user", "content": f"User request:\n{user_message}\n\nAssistant reply:\n{reply}"},
+            ])
+        except Exception:
+            return False
+
+        return verdict.strip().upper().startswith("ANNOUNCE")
 
     # Run one tool call, log it, and show the result to the model.
     def run_tool(self, call):

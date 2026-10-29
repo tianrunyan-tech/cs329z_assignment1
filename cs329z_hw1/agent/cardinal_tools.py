@@ -3,6 +3,7 @@
 from threading import Lock
 
 from cs329z_hw1 import data
+from cs329z_hw1.agent.memory import MemoryStore
 from cs329z_hw1.agent.terminal import make_terminal_tool
 from cs329z_hw1.cardinal import CARDINAL_TOOLS, cardinal_spec
 from cs329z_hw1.pipelines import doc_search
@@ -147,6 +148,19 @@ def cardinal_toolset(aux_lm, config):
             footer = "(End of document.)"
         return f"{header}\n{window['text']}\n{footer}"
 
+    # Memory lives under config.memory_dir; without it, the memory tools report that.
+    memory = MemoryStore(config.memory_dir) if config.memory_dir is not None else None
+
+    def remember(fact):
+        if memory is None:
+            raise RuntimeError("Long-term memory is not enabled in this conversation.")
+        return memory.remember(fact)
+
+    def recall(query):
+        if memory is None:
+            raise RuntimeError("Long-term memory is not enabled in this conversation.")
+        return memory.recall(query)
+
     # Placeholder for the tools that later problems build.
     def not_built_yet(**args):
         raise NotImplementedError("This tool is not available yet.")
@@ -213,8 +227,24 @@ def cardinal_toolset(aux_lm, config):
             "with grep or read parts of it with sed -n.",
             make_terminal_tool(config),
         ),
-        "remember": cardinal_spec("remember", "Not available yet.", not_built_yet),
-        "recall": cardinal_spec("recall", "Not available yet.", not_built_yet),
+        "remember": cardinal_spec(
+            "remember",
+            "Save one short fact to long-term memory, which later conversations can use. "
+            "Use it when the user states something lasting about themselves, their team, "
+            "their preferences, or what their words mean (for example \"when I say 'the "
+            "spec' I mean the firmware spec\"), corrects such a fact, or asks you to "
+            "remember something. Write the fact as one full sentence about the user, "
+            "for example \"The user's cost center is CC-8812.\"",
+            remember,
+        ),
+        "recall": cardinal_spec(
+            "recall",
+            "Search long-term memory saved in earlier conversations. Returns the saved "
+            "facts that best match the query, or everything if nothing matches. Use it "
+            "when a request may depend on something the user told you before, such as "
+            "their team, their projects, or what 'my' or 'the' refers to.",
+            recall,
+        ),
         "ask_user": cardinal_spec("ask_user", "Not available yet.", not_built_yet),
     }
 

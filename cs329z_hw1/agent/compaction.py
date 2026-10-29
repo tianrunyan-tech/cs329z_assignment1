@@ -60,6 +60,7 @@ def cap_tool_result(content, context_budget):
 # First mask older tool results, then summarize earlier turns, and finally
 # remove older steps from the current turn if more space is needed.
 # Change only the model's context; keep the transcript unchanged.
+# turn_start：它记录当前用户请求在 messages 列表中的位置，帮助代码区分“之前的对话”和“当前这次任务”
 def fit_to_budget(messages, turn_start, budget, summarize):
     if count_message_tokens(messages) <= budget:
         return messages, turn_start

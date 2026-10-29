@@ -3,6 +3,7 @@
 import copy
 
 from cs329z_hw1.agent.cardinal_tools import choose_tools
+from cs329z_hw1.agent.memory import MemoryStore
 from cs329z_hw1.agent.compaction import cap_tool_result, fit_to_budget, summary_block
 from cs329z_hw1.agent.protocol import parse_response, render_tools
 from cs329z_hw1.agent.registry import ToolRegistry
@@ -64,6 +65,13 @@ class AgentSession:
 
         # messages: what the model sees. transcript: every event, never changed.
         system_prompt = AGENT_PROMPT + "\n\n" + render_tools(self.registry.schemas())
+
+        # Memory policy: load the saved facts into the system prompt at the start of
+        # every session (at most 1/8 of the context budget); recall finds the rest.
+        if config.memory_dir is not None:
+            memory = MemoryStore(config.memory_dir)
+            max_chars = (config.context_budget // 8) * 4
+            system_prompt += "\n\n" + memory.prompt_section(max_chars)
         self.messages = [{"role": "system", "content": system_prompt}]
         self.transcript = []
 

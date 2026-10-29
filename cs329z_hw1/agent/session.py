@@ -3,6 +3,7 @@
 import copy
 
 from cs329z_hw1.agent.cardinal_tools import choose_tools
+from cs329z_hw1.agent.compaction import cap_tool_result, fit_to_budget, summary_block
 from cs329z_hw1.agent.protocol import parse_response, render_tools
 from cs329z_hw1.agent.registry import ToolRegistry
 from cs329z_hw1.llm import OutputTruncated
@@ -66,6 +67,10 @@ class AgentSession:
         self.messages = [{"role": "system", "content": system_prompt}]
         self.transcript = []
 
+        # For compaction: every message the user sent, and where the current one is in messages.
+        self.user_messages = []
+        self.turn_start = 1
+
     # Change between "confirm" and "auto" mode (used from Problem 13 on).
     def set_mode(self, mode):
         self.mode = mode
@@ -74,6 +79,8 @@ class AgentSession:
     def send(self, user_message):
         self.messages.append({"role": "user", "content": user_message})
         self.transcript.append({"type": "user", "content": user_message})
+        self.user_messages.append(user_message)
+        self.turn_start = len(self.messages) - 1
 
         # These limits apply to each send separately.
         turns = 0
@@ -97,6 +104,7 @@ class AgentSession:
             # 2. Call the model. Each call has an output limit (max_tokens).
             # A reply cut off at that limit (OutputTruncated) is malformed: log it
             turns += 1
+            self.compact()
             try:
                 reply = self.lm(self.messages)
             except OutputTruncated as error:
@@ -170,21 +178,44 @@ class AgentSession:
 
         result = self.registry.execute(call.name, call.args)
 
+        # A huge result is shortened first; the transcript keeps exactly what the model sees.
+        content = cap_tool_result(result.content, self.config.context_budget)
+
         self.transcript.append({
             "type": "tool_result",
             "name": call.name,
             "status": result.status,
-            "content": result.content,
+            "content": content,
         })
         self.messages.append({
             "role": "user",
             "content": (
                 f'<tool_result name="{call.name}" status="{result.status}">\n'
-                f"{result.content}\n"
+                f"{content}\n"
                 f"</tool_result>"
             ),
         })
         return result.status
+
+    # Keep the next model call within the context budget. The transcript is not changed,
+    # only a "compaction" event is added to record what happened.
+    def compact(self):
+        before = self.messages
+        self.messages, self.turn_start = fit_to_budget(
+            self.messages, self.turn_start, self.config.context_budget, self.summarize
+        )
+        if self.messages is not before:
+            self.transcript.append({
+                "type": "compaction",
+                "messages_before": len(before),
+                "messages_after": len(self.messages),
+            })
+
+    # Summarize older messages with the aux model (never the agent's own model).
+    def summarize(self, older):
+        return summary_block(
+            older, self.user_messages[:-1], self.aux_lm, self.config.context_budget
+        )
 
     # Send an error about the model's reply back to the model, and log it.
     def report_error(self, message):

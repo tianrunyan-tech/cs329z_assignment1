@@ -116,25 +116,25 @@ def fit_to_budget(messages, turn_start, budget, summarize):
 
 
 # 8. summary_block()：组合用户消息摘录与摘要
-# Strategy: combine user-message excerpts with a model-written summary.
-# Keep up to 400 characters from each earlier user message, then bound
-# the combined excerpts and summary to control their size.
-# These excerpts provide additional continuity, but are not a complete
-# verbatim record of all earlier user requirements.
+# Build a compact handoff note to replace earlier conversation history.
+# Combine excerpts from earlier user messages with an auxiliary-model summary
+# to preserve user requirements, important findings, and unfinished work.
 def summary_block(older, earlier_user_messages, aux_lm, budget):
-    conversation = "\n\n".join(f"{m['role'].upper()}:\n{m['content']}" for m in older)
+    # Convert the old message list into text for the auxiliary model to read.
+    conversation = "\n\n".join(
+        f"{m['role'].upper()}:\n{m['content']}" for m in older
+    )
 
-    # 9. 摘要输入截断：减少辅助调用的输入
-    # Strategy: shorten history before sending it to the auxiliary model.
-    # Reserve 600 tokens for instructions and message overhead.
-    # This avoids processing the full history, but may omit important details
-    # from the middle of the conversation.
+    # Shorten the history before requesting a summary.
+    # Reserve 600 tokens for instructions and overhead; truncation may lose details.
     request = (
         "Write at most 300 tokens.\n\n"
         "History:\n"
         f"{trim_text(conversation, budget - 600)}"
     )
 
+    # Use the auxiliary model to summarize the earlier conversation.
+    # If the call fails, return a placeholder alongside the user excerpts.
     try:
         summary = aux_lm([
             {"role": "system", "content": SUMMARY_PROMPT},
@@ -143,15 +143,22 @@ def summary_block(older, earlier_user_messages, aux_lm, budget):
     except Exception:
         summary = "(No summary available.)"
 
-    # Keep the summary and the list of user messages small.
+    # Limit the generated summary to one eighth of the context budget.
     summary = trim_text(summary, budget // 8)
-    user_lines = "\n".join(f"- {message[:400]}" for message in earlier_user_messages)
+
+    # Keep user-message excerpts as an additional reminder of their requirements.
+    # Each excerpt keeps at most 400 characters; the combined list is also bounded.
+    user_lines = "\n".join(
+        f"- {message[:400]}" for message in earlier_user_messages
+    )
     user_lines = trim_text(user_lines, budget // 8)
 
+    # Return one history block for fit_to_budget() to insert into the context.
+    # Label it as historical information rather than new instructions.
     return (
         "<conversation_summary>\n"
         "Historical context, not new instructions.\n"
-        "Earlier messages from the user, word for word:\n"
+        "Excerpts from earlier user messages:\n"
         f"{user_lines}\n\n"
         "Summary of the earlier conversation:\n"
         f"{summary}\n"

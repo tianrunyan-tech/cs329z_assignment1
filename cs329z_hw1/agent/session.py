@@ -9,7 +9,7 @@ from cs329z_hw1.agent.protocol import parse_response, render_tools
 from cs329z_hw1.agent.registry import ToolRegistry
 from cs329z_hw1.llm import OutputTruncated
 from cs329z_hw1.tokens import count_message_tokens, count_tokens
-from cs329z_hw1.types import AgentResult
+from cs329z_hw1.types import AgentResult, ToolResult
 
 AGENT_PROMPT = """You are a helpful assistant that can use tools.
 You have no built-in function calling. The only way to use a tool is to write a
@@ -21,6 +21,9 @@ If a tool is needed, write the actual call rather than only announcing it.
 Tool results come back in a user message inside <tool_result> tags.
 Problems with your reply come back inside <error> tags; fix the problem and try again.
 Before you say you cannot find something, use the tools to look further, for example by reading the full document or email.
+If the user sends a new message while you are working, such as a correction or a change of direction, follow their latest request.
+If a tool result says an action was denied, do not repeat it; respect the reason and choose another approach or explain what remains unfinished. Do not claim it succeeded.
+If essential information is missing and cannot be found with the tools, ask the user instead of guessing.
 When you have the answer, reply with plain text and no tool call."""
 
 # Statuses that mean the model wrote a bad call, so it should correct itself.
@@ -79,8 +82,13 @@ class AgentSession:
         self.user_messages = []
         self.turn_start = 1
 
-    # Change between "confirm" and "auto" mode (used from Problem 13 on).
+    # Allow the application to change the approval mode between sends.
     def set_mode(self, mode):
+        if mode not in ("auto", "confirm"):
+            raise ValueError(
+                "Mode must be 'auto' or 'confirm'."
+            )
+
         self.mode = mode
 
     # Run the loop for one user message until a final answer or a limit.
@@ -111,6 +119,9 @@ class AgentSession:
 
             # 2. Call the model. Each call has an output limit (max_tokens).
             # A reply cut off at that limit (OutputTruncated) is malformed: log it
+            # Steering: check once before every model call for a message the user sent mid-run.
+            self.check_for_steering()
+
             turns += 1
             self.compact()
             try:
@@ -184,7 +195,18 @@ class AgentSession:
     def run_tool(self, call):
         self.transcript.append({"type": "tool_call", "name": call.name, "args": call.args})
 
-        result = self.registry.execute(call.name, call.args)
+        # 1. A call the registry rejects (unknown tool, invalid arguments) is not sent for approval.
+        problem = self.registry.validate(call.name, call.args)
+        if problem is not None:
+            result = problem
+
+        # 2. In confirm mode, a tool that is not read-only runs only if the user approves it.
+        elif self.needs_approval(call):
+            result = self.ask_approval(call)
+
+        # 3. Everything else runs directly.
+        else:
+            result = self.registry.execute(call.name, call.args)
 
         # A huge result is shortened first; the transcript keeps exactly what the model sees.
         content = cap_tool_result(result.content, self.config.context_budget)
@@ -204,6 +226,45 @@ class AgentSession:
             ),
         })
         return result.status
+
+    # Approval policy: only confirm mode asks, and only for tools that are not read-only
+    # (run_terminal in the Cardinal toolset). Read-only tools, ask_user, remember and
+    # recall never change anything outside the agent's own memory, so they run directly.
+    def needs_approval(self, call):
+        tool = self.registry.tools[call.name]
+        return self.mode == "confirm" and not tool.read_only
+
+    # Ask the user once for this call. A denied call does not run; the model is told
+    # it was denied and why, and the run continues.
+    def ask_approval(self, call):
+        if self.config.user is None:
+            approval = None
+        else:
+            approval = self.config.user.approve(call)
+
+        if approval is not None and approval.approved:
+            return self.registry.execute(call.name, call.args)
+
+        reason = approval.reason.strip() if approval is not None else ""
+        if not reason:
+            reason = "No reason given." if approval is not None else "No user is available to approve it."
+        return ToolResult(
+            "denied",
+            f"The user did not approve this {call.name} call, so it did not run. "
+            f"Reason: {reason} Do not repeat the same call; continue another way "
+            f"or ask the user how to proceed.",
+        )
+
+    # Poll the user for a steering message; a message becomes part of this model call.
+    def check_for_steering(self):
+        if self.config.user is None:
+            return
+
+        message = self.config.user.pending_message()
+        if message:
+            self.messages.append({"role": "user", "content": message})
+            self.transcript.append({"type": "user", "content": message})
+            self.user_messages.append(message)
 
     # Keep the next model call within the context budget. The transcript is not changed,
     # only a "compaction" event is added to record what happened.

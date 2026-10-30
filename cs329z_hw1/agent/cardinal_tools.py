@@ -161,9 +161,11 @@ def cardinal_toolset(aux_lm, config):
             raise RuntimeError("Long-term memory is not enabled in this conversation.")
         return memory.recall(query)
 
-    # Placeholder for the tools that later problems build.
-    def not_built_yet(**args):
-        raise NotImplementedError("This tool is not available yet.")
+    # Ask the user for missing information and return their answer.
+    def ask_user(question):
+        if config.user is None:
+            raise RuntimeError("No user is available to answer questions in this conversation.")
+        return config.user.ask(question)
 
     return {
         "search_emails": cardinal_spec(
@@ -245,7 +247,14 @@ def cardinal_toolset(aux_lm, config):
             "their team, their projects, or what 'my' or 'the' refers to.",
             recall,
         ),
-        "ask_user": cardinal_spec("ask_user", "Not available yet.", not_built_yet),
+        "ask_user": cardinal_spec(
+            "ask_user",
+            "Ask the user one focused question when essential information is missing or "
+            "the request is ambiguous, for example which of two policies, projects or "
+            "dates they mean. Use the other tools first when they can provide the answer. "
+            "The user's reply is returned as the tool result.",
+            ask_user,
+        ),
     }
 
 

@@ -128,9 +128,9 @@ class MemoryStore:
             "If records conflict, consider newer corrections."
         )
 
-    # Strategy: preload memory so the model knows what has been saved.
-    # Load all facts when they fit; otherwise keep newer whole facts.
-    # Reserve the remaining store for on-demand recall.
+    # Strategy: load the whole memory store into the system prompt each session.
+    # max_chars is only a safety limit, because the system prompt is never compacted.
+    # If the store is too large, keep the newest whole facts and leave the rest for recall.
     def prompt_section(self, max_chars):
         # A damaged memory file must not stop a session from starting.
         # The file stays untouched on disk, and remember still refuses to overwrite it.

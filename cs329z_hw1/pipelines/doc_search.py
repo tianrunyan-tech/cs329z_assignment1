@@ -11,12 +11,45 @@ WINDOW_MAX_TOKENS = 1500
 
 
 # Index whole documents with BM25; keep the documents and an ID lookup for reading.
+# Also record each document's date and which announcements change it.
 def build_doc_index(docs):
     return {
         "documents": list(docs),
         "by_id": {doc["doc_id"]: doc for doc in docs},
         "bm25": build_index([doc["title"] + "\n" + doc["text"] for doc in docs]),
+        "later_changes": find_later_changes(docs),
     }
+
+
+# The "Posted:" or "Effective:" line near the top of a document, or "" if there is none.
+# Announcements and memos have a Posted date; policies have an Effective date.
+def document_date(doc):
+    for line in doc["text"].splitlines()[:10]:
+        if line.startswith(("Posted:", "Effective:")):
+            return line.strip()
+    return ""
+
+
+# Link each document to the announcements and memos that change it.
+# An announcement changes a document when it names that document's title
+# (without a trailing "(2026)"-style year), for example "Travel and Expense Policy".
+def find_later_changes(docs):
+    announcements = [doc for doc in docs if document_date(doc).startswith("Posted:")]
+    later_changes = {}
+
+    for doc in docs:
+        name = re.sub(r"\s*\(.*?\)\s*$", "", doc["title"]).strip()
+        changes = []
+
+        for announcement in announcements:
+            if announcement is not doc and name in announcement["text"]:
+                changes.append(
+                    f"{announcement['doc_id']} ({document_date(announcement)})"
+                )
+
+        later_changes[doc["doc_id"]] = changes
+
+    return later_changes
 
 
 # Count the distinct query terms that appear in one line.
@@ -116,6 +149,8 @@ def search_docs(index, query, k=5, snippet_max_tokens=SNIPPET_MAX_TOKENS):
             "title": doc["title"],
             "snippet": snippet,
             "start_line": start_line,
+            "date": document_date(doc),
+            "later_changes": index["later_changes"].get(doc["doc_id"], []),
         })
 
     return results
